@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🔥 Par2Messenger | Анонимный чат</title>
+    <title> Par2Messenger </title>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <style>
@@ -217,7 +217,7 @@
 <div class="chat">
     <div class="chat-header">
         <div class="logo">
-            🔥 Par2Messenger
+             Par2Messenger
         </div>
         <div class="user-id">
             🕶️ Ваш ID: <span id="userIdSpan">загрузка...</span>
@@ -237,7 +237,7 @@
             <button id="sendBtn">➤ ОТПРАВИТЬ</button>
         </div>
         <div style="font-size: 0.65rem; text-align: center; margin-top: 8px; color: #4b5376;">
-            🌍 Реальное время | Все сообщения видны всем | Навсегда в облаке
+             
         </div>
     </div>
 </div>
@@ -362,7 +362,7 @@
         } else {
             inputEl.placeholder = '❌ Нельзя отправить пустое сообщение';
             setTimeout(() => {
-                inputEl.placeholder = '✍️ Анонимное сообщение... увидят ВСЕ';
+                inputEl.placeholder = '✍️ Анонимное сообщение...';
             }, 1500);
         }
     });
