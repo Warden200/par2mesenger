@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title> Par2Messenger </title>
+    <title>Par2Messenger</title>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <style>
@@ -210,6 +210,22 @@
             font-size: 0.8rem;
             padding: 1rem;
         }
+        
+        /* Кнопка разрешить уведомления */
+        .notify-btn {
+            background: #3f618b;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: white;
+            font-size: 0.65rem;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        
+        .notify-btn:hover {
+            background: #5a7da8;
+        }
     </style>
 </head>
 <body>
@@ -217,10 +233,11 @@
 <div class="chat">
     <div class="chat-header">
         <div class="logo">
-             Par2Messenger
+            🔥 Par2Messenger
         </div>
         <div class="user-id">
             🕶️ Ваш ID: <span id="userIdSpan">загрузка...</span>
+            <button id="enableNotificationsBtn" class="notify-btn" style="display:none;">🔔 Вкл. уведомления</button>
         </div>
         <div class="online-status" id="statusSpan">
             🔄 подключение...
@@ -237,7 +254,7 @@
             <button id="sendBtn">➤ ОТПРАВИТЬ</button>
         </div>
         <div style="font-size: 0.65rem; text-align: center; margin-top: 8px; color: #4b5376;">
-             
+            💡 При новом сообщении приходит уведомление (если чат не в фокусе)
         </div>
     </div>
 </div>
@@ -266,9 +283,64 @@
         currentUserId = 'anon_' + randomPart;
         localStorage.setItem('par2messenger_userId', currentUserId);
     }
-    document.getElementById('userIdSpan').innerText = currentUserId;
-
-    // --- Статус подключения
+    document.getElementById('userIdSpan').innerHTML = currentUserId + ' <button id="enableNotificationsBtn" class="notify-btn">🔔 Уведомления</button>';
+    
+    // --- НАСТРОЙКА УВЕДОМЛЕНИЙ ---
+    let notificationsEnabled = false;
+    let lastMessageCount = 0;
+    let isPageActive = true;
+    
+    // Отслеживаем, активна ли страница
+    document.addEventListener('visibilitychange', () => {
+        isPageActive = !document.hidden;
+        if (isPageActive) {
+            // Когда возвращаемся на страницу, сбрасываем счётчик
+            lastMessageCount = 0;
+        }
+    });
+    
+    // Запрос разрешения на уведомления
+    function requestNotificationPermission() {
+        if (!('Notification' in window)) {
+            console.log('Браузер не поддерживает уведомления');
+            alert('Ваш браузер не поддерживает уведомления');
+            return;
+        }
+        
+        if (Notification.permission === 'granted') {
+            notificationsEnabled = true;
+            alert('✅ Уведомления включены!');
+        } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    notificationsEnabled = true;
+                    alert('✅ Уведомления включены! Теперь вы будете получать оповещения о новых сообщениях.');
+                } else {
+                    alert('❌ Уведомления отклонены. Вы можете включить их в настройках браузера.');
+                }
+            });
+        } else {
+            alert('❌ Уведомления заблокированы. Включите их в настройках браузера (🔒 рядом с адресной строкой)');
+        }
+    }
+    
+    // Показать уведомление
+    function showNotification(senderId, messageText, senderShortId) {
+        if (!notificationsEnabled && Notification.permission === 'granted') {
+            notificationsEnabled = true;
+        }
+        
+        if (notificationsEnabled && !isPageActive) {
+            // Показываем уведомление только если страница НЕ активна
+            new Notification(`📨 Новое сообщение от ${senderShortId || senderId.slice(-8)}`, {
+                body: messageText.length > 100 ? messageText.slice(0, 100) + '...' : messageText,
+                icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%232c6285"%3E%3Cpath d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2z"/%3E%3C/svg%3E',
+                silent: false
+            });
+        }
+    }
+    
+    // --- Статус подключения ---
     const statusSpan = document.getElementById('statusSpan');
     const connectedRef = database.ref('.info/connected');
     connectedRef.on('value', (snap) => {
@@ -280,8 +352,8 @@
             statusSpan.style.color = '#ff8888';
         }
     });
-
-    // --- ОТПРАВКА СООБЩЕНИЯ
+    
+    // --- ОТПРАВКА СООБЩЕНИЯ ---
     function sendMessage(text) {
         if (!text || text.trim() === '') return false;
         
@@ -297,13 +369,15 @@
         });
         return true;
     }
-
-    // --- ПОЛУЧЕНИЕ СООБЩЕНИЙ В РЕАЛЬНОМ ВРЕМЕНИ
+    
+    // --- ПОЛУЧЕНИЕ СООБЩЕНИЙ В РЕАЛЬНОМ ВРЕМЕНИ С УВЕДОМЛЕНИЯМИ ---
     const container = document.getElementById('messagesContainer');
     let isFirstMessage = true;
-
+    let lastMessageId = null;
+    
     messagesRef.orderByChild('timestamp').on('child_added', (snapshot) => {
         const msg = snapshot.val();
+        const msgId = snapshot.key;
         if (!msg) return;
         
         // Убираем заглушку "Загрузка..." при первом сообщении
@@ -313,6 +387,14 @@
         }
         
         const isOwn = (msg.userId === currentUserId);
+        
+        // ========== УВЕДОМЛЕНИЕ ДЛЯ ЧУЖИХ СООБЩЕНИЙ ==========
+        if (!isOwn && msgId !== lastMessageId) {
+            lastMessageId = msgId;
+            const shortId = msg.userId.length > 12 ? msg.userId.substring(0, 10) + '..' : msg.userId;
+            showNotification(msg.userId, msg.text, shortId);
+        }
+        
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
         
@@ -339,7 +421,7 @@
         container.appendChild(messageDiv);
         container.scrollTop = container.scrollHeight;
     });
-
+    
     // Защита от XSS
     function escapeHtml(str) {
         if (!str) return '';
@@ -350,11 +432,11 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
     }
-
-    // --- Обработчики кнопок
+    
+    // --- Обработчики кнопок ---
     const sendBtn = document.getElementById('sendBtn');
     const inputEl = document.getElementById('messageInput');
-
+    
     sendBtn.addEventListener('click', () => {
         if (sendMessage(inputEl.value)) {
             inputEl.value = '';
@@ -362,21 +444,42 @@
         } else {
             inputEl.placeholder = '❌ Нельзя отправить пустое сообщение';
             setTimeout(() => {
-                inputEl.placeholder = '✍️ Анонимное сообщение...';
+                inputEl.placeholder = '✍️ Анонимное сообщение... увидят ВСЕ';
             }, 1500);
         }
     });
-
+    
     inputEl.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             sendBtn.click();
         }
     });
-
+    
+    // Кнопка включения уведомлений (динамическая)
+    setTimeout(() => {
+        const notifyBtn = document.getElementById('enableNotificationsBtn');
+        if (notifyBtn) {
+            notifyBtn.addEventListener('click', requestNotificationPermission);
+            
+            // Если уже разрешено, показываем другой текст
+            if (Notification.permission === 'granted') {
+                notifyBtn.textContent = '✅ Уведомления вкл';
+                notificationsEnabled = true;
+            } else {
+                notifyBtn.style.display = 'inline-block';
+            }
+        }
+    }, 100);
+    
     inputEl.focus();
     
-    console.log('✅ Par2Messenger запущен!');
+    // Проверяем разрешение при загрузке
+    if (Notification.permission === 'granted') {
+        notificationsEnabled = true;
+    }
+    
+    console.log('✅ Par2Messenger запущен! Уведомления добавлены.');
 </script>
 </body>
 </html>
